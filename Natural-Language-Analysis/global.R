@@ -1,8 +1,9 @@
-if(!require('BBmisc')){
-  suppressMessages(install.packages('BBmisc'))
-}
+if(!require('BBmisc')) suppressMessages(install.packages('BBmisc'))
+if(!require('devtools')) suppressMessages(install_github('hadley/devtools'))
+if(!require('memoise')) suppressMessages(install_github('hadley/memoise'))
+
 suppressMessages(library('BBmisc'))
-pkgs <- c('tm', 'wordcloud', 'memoise', 'plyr', 'dplyr', 'magrittr', 'stringr', 'googleVis')
+pkgs <- c('tm', 'wordcloud', 'devtools', 'memoise', 'plyr', 'dplyr', 'magrittr', 'stringr', 'googleVis')
 suppressMessages(lib(pkgs))
 rm(pkgs)
 

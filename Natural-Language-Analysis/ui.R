@@ -39,10 +39,11 @@ ui <- shinyUI(
       tabsetPanel(
         tabPanel('Article', htmlOutput('txte'), verbatimTextOutput('article')),
         tabPanel('WordCloud', plotOutput('wordplot')), 
-        tabPanel('Table', tableOutput('table')), 
+        tabPanel('Table', DT::dataTableOutput('table')), 
         tabPanel('Histogram', 
-                 div(id = 'chart', style = 'display:inline;position:absolute', 
-                     showOutput('histplot', 'rickshaw'))), 
+                 #div(id = 'chart', style = 'display:inline;position:absolute', 
+                     showOutput('histplot', 'nvd3')#)
+                 ), 
         tabPanel('Reference', 
                  h4('Reference:'),
                  p('1. ', HTML("<a href='http://shiny.rstudio.com/articles/'>Articles</a>")),

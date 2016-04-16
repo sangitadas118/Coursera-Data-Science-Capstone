@@ -9,7 +9,7 @@
 ##
 
 suppressMessages(BBmisc::lib('DT', 'rCharts'))
-options(RCHART_TEMPLATE = 'Rickshaw.html')
+#'@ options(RCHART_TEMPLATE = 'Rickshaw.html', RCHART_LIB = 'morris')
 
 ## Define server logic required to draw a histogram
 shinyServer(function(input, output) {
@@ -46,6 +46,7 @@ shinyServer(function(input, output) {
                   colors=brewer.pal(8, 'Dark2'))
   })
   
+  ## https://rstudio.github.io/DT/shiny.html
   output$table <- renderDataTable({
     dat <- terms()$dat
     dat <- filter(dat[seq(ifelse(input$max>nrow(dat),nrow(dat),input$max)),], 
@@ -70,14 +71,16 @@ shinyServer(function(input, output) {
   ## make the rickshaw rChart
   ## http://rcharts.io/gallery/
   ## http://timelyportfolio.github.io/rCharts_rickshaw_gettingstarted/
-  output$histplot <- renderPlot({
-    chart <- Rickshaw$new()
+  output$histplot <- renderChart2({
+    #'@ chart <- Rickshaw$new()
     dat <- terms()$dat
     dat <- filter(dat[seq(ifelse(input$max>nrow(dat),nrow(dat),input$max)),], 
                   Docs>=ifelse(input$freq>max(dat$Docs),max(dat$Docs),input$freq))
-    chart$nPlot(Docs ~ Term, data = dat, type = 'multiBarChart')
-    chart$set(width = 600, height = '100%', slider = TRUE)
-    return(chart2)
+    ## http://stackoverflow.com/questions/26789478/rcharts-and-shiny-plot-does-not-show-up
+    nPlot(Docs ~ Term, data = dat, type = 'multiBarChart')
+    #'@ chart$nPlot(Docs ~ Term, data = dat, type = 'multiBarChart')
+    #'@ chart$set(width = 600, height = '100%', slider = TRUE)
+    #'@ return(chart)
   })
   
 })
