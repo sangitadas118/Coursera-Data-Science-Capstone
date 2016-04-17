@@ -7,7 +7,7 @@
 #    http://shiny.rstudio.com/
 #
 
-library('shiny')
+suppressMessages(BBmisc::lib('shiny', 'DT', 'rCharts'))
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(
