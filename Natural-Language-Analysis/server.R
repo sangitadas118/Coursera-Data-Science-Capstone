@@ -9,6 +9,8 @@
 ##
 
 suppressMessages(BBmisc::lib('DT', 'rCharts'))
+require('rCharts', quietly=TRUE) ## Unable find showOutput function without library()/require() 
+require('DT', quietly=TRUE)      ##   since above lib() doesn't work on RStudioConnect.com but works locally.
 #'@ options(RCHART_TEMPLATE = 'Rickshaw.html', RCHART_LIB = 'morris')
 
 ## Define server logic required to draw a histogram

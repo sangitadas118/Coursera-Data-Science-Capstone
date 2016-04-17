@@ -2,8 +2,8 @@ name: Natural-Language-Analysis
 account: englianhu
 server: beta.rstudioconnect.com
 appId: 798
-bundleId: 1432
+bundleId: 1437
 url: https://beta.rstudioconnect.com/englianhu/Natural-Language-Analysis/
-when: 1460865631.61843
+when: 1460867662.91715
 asMultiple: FALSE
 asStatic: FALSE

@@ -1,11 +1,20 @@
 if(!require('BBmisc')) suppressMessages(install.packages('BBmisc'))
-if(!require('devtools')) suppressMessages(install_github('hadley/devtools'))
-if(!require('memoise')) suppressMessages(install_github('hadley/memoise'))
+#'@ if(!require('devtools')) suppressMessages(install_github('hadley/devtools'))
+#'@ if(!require('memoise')) suppressMessages(devtools::install_github('hadley/memoise'))
 
 suppressMessages(library('BBmisc'))
-pkgs <<- c('tm', 'wordcloud', 'devtools', 'memoise', 'plyr', 'dplyr', 'magrittr', 'stringr', 'rvest', 'googleVis')
+pkgs <<- c('tm', 'wordcloud', 'devtools', 'memoise', 'plyr', 'dplyr', 'magrittr', 'stringr', 'rvest')
 suppressMessages(lib(pkgs))
 rm(pkgs)
+
+require('tm', quietly=TRUE)
+require('wordcloud', quietly=TRUE) ## Unable find showOutput function without library()/require() 
+require('memoise', quietly=TRUE)   ##   since above lib() doesn't work on RStudioConnect.com but works locally.
+require('rvest', quietly=TRUE)
+require('plyr', quietly=TRUE)
+require('dplyr', quietly=TRUE)
+require('magrittr', quietly=TRUE)
+require('stringr', quietly=TRUE)
 
 
 # The list of valid books
