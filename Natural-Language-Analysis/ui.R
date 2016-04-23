@@ -7,7 +7,7 @@
 #    http://shiny.rstudio.com/
 #
 
-suppressMessages(BBmisc::lib('shiny', 'DT', 'rCharts'))
+suppressMessages(BBmisc::lib(c('shiny', 'DT', 'rCharts')))
 require('shiny', quietly=TRUE)
 require('rCharts', quietly=TRUE) ## Unable find showOutput function without library()/require() 
 require('DT', quietly=TRUE)      ##   since above lib() doesn't work on RStudioConnect.com but works locally.
