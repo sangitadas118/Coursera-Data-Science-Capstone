@@ -1,0 +1,533 @@
+---
+title: "Coursera Capstone Project Milestone Report"
+subtitle: "Data Science Capstone by Johns Hopkins University"
+author: "[®γσ, Eng Lian Hu](http://englianhu.wordpress.com) <img src='figure/ShirotoNorimichi.jpg' width='24'> 白戸則道®"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html:
+    toc: yes
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+# 1. Introduction
+
+  - Section [1.1 Assignment]
+  - Section [1.2 Preparing the environment]
+
+## 1.1 Assignment
+
+  **Instructions**
+
+  The goal of this project is just to display that you've gotten used to working with the data and that you are on track to create your prediction algorithm. Please submit a report on [R Pubs](http://rpubs.com/)^[You can create an account on [RPubs.com](http://rpubs.com/), [ShinyApps.io](http://www.shinyapps.io) and [®StudioConnect.com](https://beta.rstudioconnect.com/) to publish your reports or shiny apps] that explains your exploratory analysis and your goals for the eventual app and algorithm. This document should be concise and explain only the major features of the data you have identified and briefly summarize your plans for creating the prediction algorithm and [Shiny app](http://shiny.rstudio.com/) in a way that would be understandable to a non-data scientist manager. You should make use of tables and plots to illustrate important summaries of the data set. The motivation for this project is to:
+  
+  1. Demonstrate that you've downloaded the data and have successfully loaded it in.
+  2. Create a basic report of summary statistics about the data sets.
+  3. Report any interesting findings that you amassed so far.
+  4. Get feedback on your plans for creating a prediction algorithm and Shiny app.
+
+  Review criteria:
+  
+  1. Does the link lead to an HTML page describing the exploratory analysis of the training data set?
+  2. Has the data scientist done basic summaries of the three files? Word counts, line counts and basic data tables?
+  3. Has the data scientist made basic plots, such as histograms to illustrate features of the data?
+  4. Was the report written in a brief, concise style, in a way that a non-data scientist manager could appreciate?
+
+## 1.2 Preparing the environment
+
+  Loading The Required Libraries and creating support functions.
+
+```{r load-packages, cache=TRUE}
+## Setting to omit all warnings
+options(warn=-1)
+
+## Loading the package 'BBmisc'
+if(suppressMessages(!require('BBmisc'))) install.packages('BBmisc')
+suppressMessages(library('BBmisc'))
+
+pkgs <- c('tufte', 'knitr', 'rmarkdown', 'lubridate', 'plyr', 'dplyr', 'magrittr', 'purrr', 'stringr', 'stringi', 'wordcloud', 'slam', 'tm', 'igraph', 'NLP', 'xtable', 'SnowballC', 'rpart', 'RWeka', 'RColorBrewer', 'rvest', 'parallel', 'doParallel', 'ggplot2', 'googleVis', 'rCharts', 'janeaustenr', 'syuzhet', 'viridis')
+suppressMessages(lib(pkgs)) 
+
+## load in case of BBmisc::lib() doesn't work
+suppressMessages(plyr::l_ply(pkgs, require, quietly = TRUE))
+rm(pkgs)
+```
+
+  Creating a Parallel computing Cluster and setting adjustment.
+
+```{r setting-adjustment}
+## Creating a parallel computing Cluster and support functions.
+## Preparing the parallel cluster using the cores
+#'@ doParallel::registerDoParallel(cores = 16)
+#'@ BiocParallel::register(MulticoreParam(workers=8))
+
+## Preparing the parallel cluster using the cores
+suppressMessages(library('parallel'))
+jobcluster <- makeCluster(detectCores())
+invisible(clusterEvalQ(jobcluster, library('tm')))
+invisible(clusterEvalQ(jobcluster, library('RWeka')))
+options(mc.cores = 2)
+
+## Set the googleVis options first to change the behaviour of plot.gvis, so that only the chart 
+##  component of the HTML file is written into the output file.
+##  
+## Set option to below if you want to plot an independent webpage with graph 
+#'@ options(gvis.print.tag='html')
+op <- options(gvis.plot.tag='chart')
+
+## knitr configuration
+# invalidate cache when the tufte version changes
+opts_knit$set(progress=FALSE)
+opts_chunk$set(echo = TRUE, message = FALSE, tidy = TRUE, comment = NA, fig.path = 'figure/', fig.keep = 'high', fig.width = 10, fig.height = 6, fig.align = 'center', cache.extra = packageVersion('tufte'))
+
+options(htmltools.dir.version = FALSE)
+
+## Setting for rCharts
+## http://ramnathv.github.io/posts/rcharts-nvd3/
+options(
+  rcharts.mode = 'iframesrc', 
+  rcharts.cdn = TRUE,
+  RCHART_WIDTH = 600,
+  RCHART_HEIGHT = 400)
+```
+
+# 2. Data
+
+  - Section [2.1 Collecting Data]
+  - Section [2.2 Processing Data]
+    - Section [2.2.1 Read Data]
+    - Section [2.2.2 Analyse Data]
+  - Section [2.3 Plot Histogram]
+
+## 2.1 Collecting Data
+
+  The dataset is downloadable in zipped file via [here](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip).
+
+```{r collect-data}
+if(!file.exists('data/')) dir.create('data/')
+
+lnk <- 'https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip'
+destfile <- 'Coursera-SwiftKey.zip'
+if(!file.exists(paste0('data/', destfile))) {
+  download.file(lnk, destfile = paste0('data/', destfile))
+  
+  ## Unzip the dataset
+  #'@ unzip(paste0('data/', destfile), exdir = 'data/final/de_DE', list = TRUE)
+  # Error in unzip(paste0("data/", destfile), exdir = "data/final/de_DE",  : 
+  #   'exdir' does not exist
+  unzip(paste0('data/', destfile), exdir = 'data/')
+}
+
+## list down the details of the zipped file
+unzip(paste0('data/', destfile), list = TRUE)
+```
+
+```{r rm-objs1, include=FALSE}
+rm(lnk, destfile)
+```
+
+  From above information, we can know the information of the zipped files, and now we try to list out the documents for this mile-stone report as well as the summary of files.
+  
+```{r project-files}
+## files for this mile-stone report
+lsfiles <- list.files('data/final/de_DE')
+lsfiles
+
+## summary of files
+datafiles <- paste0('data/final/de_DE/', lsfiles)
+rm(lsfiles)
+lapply(as.list(datafiles), file.info) %>% rbind_all
+```
+
+## 2.2 Processing Data
+
+### 2.2.1 Read Data
+
+  Now we need to read the dataset prior to analyse. R is fairly slow in reading files. `read.table()` is slow, `scan()` a bit faster, and `readLines()` fastest. `stringi::stri_read_lines()` ^[[stri_read_lines](http://docs.rexamine.com/R-man/stringi/stri_read_lines.html) is a substitute for the system's `readLines` function, with the ability to auto-detect input encodings (or specify one manually), re-encode input without any strange function calls or sys options change, and split the text into lines with [`stri_split_lines1`](http://docs.rexamine.com/R-man/stringi/stri_split_lines.html) (which conforms with the Unicode guidelines for newline markers).] is a substitute of `readLines()`.
+  
+  Sad, isn't it? And what does R do? Process data. So we read large files in all the time. But beyond `readLines()`, R has deeper routines for reading files. There are also `readChar()` and `readBin()`. It turns out that using these, one can read in files faster. You can refer to **Faster files in R**[^[Faster files in R](http://www.r-bloggers.com/faster-files-in-r/)].
+  
+```{r read-files-efficiency}
+## http://www.r-bloggers.com/faster-files-in-r/
+## 
+## Run without parallel computing
+## 
+## readLines in normal way
+system.time(dat1 <- llply(datafiles, function(x){
+  readLines(x, encoding = 'UTF-8')                                              #   user  system elapsed
+}))                                                                             # 18.937   0.240  19.485
+
+## ReadLines in binary mode
+system.time(dat2 <- llply(datafiles, function(x){
+  con <- file(x, open = 'rb')
+  result <- readLines(con, encoding = 'UTF-8', file.info(x)$size)
+  close(con)
+  return(result)                                                                #   user  system elapsed 
+}))                                                                             # 19.942   0.659  20.625
+
+## readChar
+system.time(dat3 <- llply(datafiles, function(x){
+  con <- file(x, open = 'rb')
+  result <- readChar(con, file.info(x)$size, useBytes=TRUE)
+  close(con)
+  strsplit(result,'\n', fixed=T, useBytes=T)[[1]] %>% str_replace_all('\r', '') #   user  system elapsed
+}))                                                                             #  5.882   0.188   2.075
+
+##
+## Run with parallel computing
+##
+## readLines in normal way with parallel computing
+system.time(dat1p <- llply(datafiles, function(x){
+  readLines(x, encoding = 'UTF-8')                                              #   user  system elapsed
+}, .parallel=TRUE))                                                             # 18.750   0.105  18.877
+
+## ReadLines in binary mode with parallel computing
+system.time(dat2p <- llply(datafiles, function(x){
+  con <- file(x, open = 'rb')
+  result <- readLines(con, encoding = 'UTF-8', file.info(x)$size)
+  close(con)
+  return(result)                                                                #   user  system elapsed 
+}, .parallel=TRUE))                                                             # 20.348   0.720  21.095
+
+## readChar with parallel computing
+system.time(dat3p <- llply(datafiles, function(x){
+  con <- file(x, open = 'rb')
+  result <- readChar(con, file.info(x)$size, useBytes=TRUE)
+  close(con)
+  strsplit(result,'\n', fixed=T, useBytes=T)[[1]] %>% str_replace_all('\r', '') #   user  system elapsed
+}, .parallel=TRUE))                                                             #  5.858   0.158   2.019
+
+##
+## readChar seperately in list
+##
+system.time({
+    dat3s <- list(
+        blogs = readChar(file(datafiles[1], 'rb'), file.info(datafiles)$size[1], useBytes=TRUE) %>% strsplit('\n', fixed=T, useBytes=T) %>% unlist %>% str_replace_all('\r', ''),
+        news = readChar(file(datafiles[2], 'rb'), file.info(datafiles)$size[2], useBytes=TRUE) %>% strsplit('\n', fixed=T, useBytes=T) %>% unlist %>% str_replace_all('\r', ''),
+        twitter = readChar(file(datafiles[3], 'rb'), file.info(datafiles)$size[3], useBytes=TRUE) %>% strsplit('\n', fixed=T, useBytes=T) %>% unlist %>% str_replace_all('\r', '')
+    ) %>% llply(unlist)                                                         #   user  system elapsed
+})                                                                              #  5.123   0.214   1.337
+```
+
+```{r matching-data}
+names(dat1) <- names(dat1p) <- names(dat2) <- names(dat2p) <- names(dat3) <- names(dat3p) <- c('blogs', 'news', 'twitter')
+llply(c(dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s), class)
+llply(list(dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s), str)
+smp <- sample(list(dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s), size=1) %>% unlist(recursive=FALSE) # randomly take one data as sample files for further analysis
+```
+
+  From the above breakdown of `r length(c(dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s))` files we know there are **same**^[`readChar()` will get the words but end with character `\r` in every single line. Secondly it will be in class `list` and you just need to `unlist`. There has another thing need to be considered which are split the string and need to replace the characters `\n` and `\r` via `strsplit(result,'\n', fixed=T, useBytes=T)[[1]] %>% str_replace_all('\r', '')` as mentioned in description of function [`stri_stats_general()`](http://rpackages.ianhowson.com/rforge/stringi/man/stri_stats_general.html)]. Here we take only one file for further analysis.
+
+```{r rm-objs2, include=FALSE}
+rm(datafiles, dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s)
+```
+
+### 2.2.2 Analyse Data
+
+  Now we try to summarise the files as below.
+
+```{r files-summary}
+data.frame(File = names(smp), t(sapply(smp, stri_stats_general))) %>% tbl_df %>% kable
+```
+
+  *table 2.2.2.1 : Summary of text files*
+
+```{r data-summary1}
+cWords <- llply(smp, stri_count_words)
+ldply(cWords, summary) %>% kable #'@ llply(cWords, summary) #if you want to display in list
+```
+
+  *table 2.2.2.2 : Quantiles of text files*
+
+## 2.3 Plot Histogram
+
+  We try to make the maximum of the lines inside text files equivalence in order to plot a histogram with `rCharts`^[[`rCharts` packages](http://rcharts.io/gallery/)].
+
+```{r arrange-data1}
+mxSub <- llply(cWords, function(x) max(length(x)))
+mxAll <- mxSub %>% unlist %>% max
+chSub <- llply(mxSub, function(x) mxAll - x)
+cWords1 <- llply(seq(cWords), function(i) c(cWords[[i]], rep(0, chSub[[i]]))) %>% data.frame(Line=seq(mxAll), .) %>% tbl_df
+names(cWords1) <- c('Line', names(cWords))
+rm(mxSub, mxAll, chSub)
+```
+
+  Here I plot an histogram via `gvisHistogram()`^[Where you can refer to [Annotation charts and histograms with googleVis](http://www.r-bloggers.com/annotation-charts-and-histograms-with-googlevis/) inside [**googleVis** packages](https://github.com/mages/googleVis)].
+
+```{r plot-hist1}
+## Set option to below if you want to plot an independent webpage with graph 
+#'@ options(gvis.print.tag='html')
+cWords1[names(cWords)] %>% gvisHistogram(
+  options=list(
+    legend="{ position: 'top', maxLines: 2 }",
+    colors="['#5C3292', '#1A8763', '#871B47']",
+    width=600), chartid="Histogram") %>% plot
+```
+
+  *graph 2.3.1 : Histogram of words per line in* **`r paste0(names(cWords), collapse=', ')`** *files.*
+
+# 3. Data Mining
+  
+  - Section [3.1 Sampling the Data]
+  - Section [3.2 Text Mining]
+    - Section [3.2.1 Cleaning Data]
+    - Section [3.2.2  Word Frequency]
+    - Section [3.2.3 Relationships Between Terms]
+  - Section [3.3 Plot Histogram]
+
+## 3.1 Sampling the Data
+
+  My previous version report^[Coding inside section **Subsetting the dataset** on [Coursera Capstone Project Milestone Report](http://rstudio-pubs-static.s3.amazonaws.com/66352_a419309e18bc49e79aa1b8de27c9dad5.html#subsetting-the-dataset)] united the sampling but now I sampling seperately in order to make a better interactable data visulization via [MultiBarChart with NVD3](http://rcharts.io/viewer/?5457195#.VxpRHfl96Ul)/[rCharts: Highcharts example](http://rstudio-pubs-static.s3.amazonaws.com/5548_c3b680696b084e5db17eecf8c079a3c1.html).
+
+  The 10000 sample data will be taken as obeservation from the populations.
+
+```{r sampling}
+## Randomly sampling the dataset
+## 10000 data sample taken from populations
+#'@ dataSubset <- sample(unlist(smp), size = 10000, replace = TRUE) #united 3 files into one
+dataSubset <- llply(smp, sample, size = 10000)#, replace = TRUE) #seperately for rCharts
+corpus <- llply(dataSubset, function(x) Corpus(VectorSource(x)))
+rm(dataSubset)
+```
+
+## 3.2 Text Mining
+
+### 3.2.1 Cleaning Data
+
+  We need to filter and clean the data for exploratory analysis.
+  
+  Due to there has unconvertable word which is ``r lnk %>% html_session %>% html_nodes('div a') %>% html_text(trim=TRUE) %>% .[735]`` while you can use `nchar(iconv(bw, 'ISO-8859-1', 'UTF-8'))`^[You can refer to [How to calculate nchar in R?](http://stackoverflow.com/questions/13328838/how-to-calculate-nchar-in-r) and [R: invalid multibyte string](http://stackoverflow.com/questions/4993837/r-invalid-multibyte-string) which provides the answer about how to skip the untranslatable words] to solve it.
+
+  Tasks such as removing punctuations, white spaces and numbers as well as converting text to lowercase are performed. Removal of profanity also been performed and sourced the list of words from [here](http://www.youswear.com/?language=German).
+  
+  Since I changed from united data to a list of data for text mining. Here I try to make it simpler to apply multiple corpuras to a list of data^[I tried to refer to [Make dataframe of top N frequent terms for multiple corpora using tm package in R](http://stackoverflow.com/questions/15506118/make-dataframe-of-top-n-frequent-terms-for-multiple-corpora-using-tm-package-in) and [More efficient means of creating a corpus and DTM](http://stackoverflow.com/questions/25330753/more-efficient-means-of-creating-a-corpus-and-dtm) but `tm_map(corpus, removeNumbers)` doesn't work, here I skip to filter swear words].
+  
+```{r filter-words}
+## bad words in german language
+lnk <- 'http://www.youswear.com/?language=German'
+bWords <- lnk %>% html_session %>% html_nodes('div a') %>% html_text(trim=TRUE) %>% .[nchar(iconv(., 'ISO-8859-1', 'UTF-8')) > 0] %>% stri_trans_tolower
+
+## Cleaning the data (process the text) for Exploratory Analysis
+skipWords1 <- function(x) removeWords(x, stopwords('german'))
+skipWords2 <- function(x) removeWords(x, bWords)
+funcs <- list(content_transformer(tolower), removePunctuation, stemDocument, stripWhitespace, removeNumbers, PlainTextDocument, skipWords1)#, skipWords2)
+corpus <- llply(corpus, function(x) {
+  cp <- tm_map(x, FUN = tm_reduce, tmFuns = funcs)
+  #'@ tm_map(cp, removeWords, bWords)
+  #Error in UseMethod("meta", x) : 
+  #  no applicable method for 'meta' applied to an object of class "try-error" 
+  }) #'@ , mc.cores=2)) #apply mc.cores=2 will be slower
+rm(lnk, bWords, skipWords1, skipWords2, funcs)
+```
+
+### 3.2.2 Word Frequency
+
+  Well, now we try to manipulate **Term Document Matrix** file and you can refer to **Text Mining in R**^[This vignette --- [**Introduction to the tm Package** - Text Mining in R](https://cran.r-project.org/web/packages/tm/vignettes/tm.pdf) gives a short introduction to text mining in R utilizing the text mining framework provided by the [**tm** package](https://cran.r-project.org/web/packages/tm/index.html) which present methods for data import, corpus handling, preprocessing, metadata management, and creation of term-document matrices. The author focus is on the main aspects of getting started with text mining in R --- an in-depth description of the text mining infrastructure offered by tm was published in the Journal of Statistical Software (Feinerer et al., 2008). An introductory article on text mining in R was published in R News (Feinerer, 2008).]. Here is an example that you can refer to [Basic Text Mining in R](https://rstudio-pubs-static.s3.amazonaws.com/31867_8236987cf0a8444e962ccd2aec46d9c3.html).
+  
+  `row_sums()` has not inside `tm` package now and you need to load from slam^[`slam::row_sums` is designate for *simple_triplet_matrix* which different with `rowSums` while you can refer to [Row sum for large term-document matrix / simple_triplet_matrix ?? {tm package}](http://stackoverflow.com/questions/21921422/row-sum-for-large-term-document-matrix-simple-triplet-matrix-tm-package) and [Can't find documentation for R function row_sums and col_sums](http://stackoverflow.com/questions/15055584/cant-find-documentation-for-r-function-row-sums-and-col-sums)].
+  
+  Only top 1000 rows or 10% from the sample data will be display.
+  
+```{r tdm-handle}
+#'@ tdm <- llply(corpus, function(x) {
+#'@   dT = TermDocumentMatrix(x)
+#'@   dT$tot = row_sums(dT, na.rm = TRUE) #slam::row_sums() or slam::rollup()
+#'@   return(dT)})
+
+dtm <- llply(corpus, function(x){
+  DocumentTermMatrix(x)
+})
+
+dtmFreq <- llply(dtm, function(x) colSums(as.matrix(x)))
+dtmData <- llply(dtmFreq, function(x) data.frame(Term = names(x), Freq = x) %>% tbl_df %>% arrange(desc(Freq)))
+
+## Only top 1000 rows / 10% from the sample data be display.
+## filter top 1000 rows will appear
+#'@ dtmData <- llply(dtmData, function(x) x[seq(1000),])
+dtmData <- ldply(dtmData, function(x) x[seq(1000),]) %>% tbl_df
+```
+
+```{r list-freq}
+llply(dtm, findFreqTerms, lowfreq=300)
+```
+
+## 3.2.3 Relationships Between Terms
+
+**Term Correlations**
+
+  If you have a term in mind that you have found to be particularly meaningful to your analysis, then you may find it helpful to identify the words that most highly correlate with that term. If words always appear together, then correlation=1.0.
+
+```{r find-assocs}
+#'@ llply(dtm, findAssocs, c('das', 'die'), corlimit=0.98) # specifying a correlation limit of 0.98
+
+## Randomly pick a dataset to inspect
+findAssocs(dtm[[sample(names(dtm), size=1)]], c('das', 'die'), corlimit=0.98)
+```
+
+  Now we try to look inside the cross table matrix over the data.
+
+```{r cross-matrix}
+## Randomly pick a dataset to inspect
+inspect(dtm[[sample(names(dtm), size=1)]][1000:1005, 1000:1005])
+```
+
+## 3.3 Plot Histogram
+
+```{r plot-hist2}
+nPlot(Freq ~ Term, group = '.id', data = dtmData, type = 'multiBarChart')
+```
+
+  *graph 3.3.1 : Histogram of words grouped by* **`r paste0(names(dtm), collapse=', ')`** *files.*
+
+# 4. Data Visulaization
+
+  - Section [4.1 Plot Word Cloud]
+  - Section [4.2 Plot Sentimental Graph]
+  - Section [4.3 RWeka]
+    - Section [4.3.1 Prediction with J48 (aka C4.5)]
+    - Section [4.3.2 Evaluation in Weka]
+  - Section [4.4 Plot Dicision Tree]
+
+## 4.1 Plot Word Cloud
+
+```{r wordcloud}
+## setting of display of the graphs
+## 3 figures arranged in 3 rows and 1 column
+par(mfrow=c(3,1))
+
+## Plot wordcloud graph
+llply(corpus, function(x){
+  wordcloud(words = x, random.order = FALSE, rot.per = 0.35, use.r.layout = FALSE, 
+            max.words = 100, colors = brewer.pal(8, "Dark2"))
+  #'@ text(x = 0.5, y = 1.1, "TriGram Word Cloud")
+})
+```
+
+  *graph 4.1.1 : Wordcloud graphs.*
+
+## 4.2 Plot Sentimental Graph
+
+  You might think literary criticism is no place for statistical analysis, but given digital versions of the text you can, for example, use sentiment analysis to the dataset. [Pride and Prejudice and Z-scores](http://blog.revolutionanalytics.com/2016/04/pride-and-prejudice-and-z-scores.html)^[The author make an R package for her texts, for easy access for herself and anybody else who would like to do some text analysis on a nice sample of prose where you can read through [If I Loved Natural Language Processing Less, I Might Be Able to Talk About It More](http://juliasilge.com/blog/If-I-Loved-NLP-Less/) for more details.] introduced a R package termed as [`janeaustenr` packages](https://github.com/juliasilge/janeaustenr) and [Introduction to the `Syuzhet` Package](https://cran.r-project.org/web/packages/syuzhet/vignettes/syuzhet-vignette.html).
+
+```{r sentimental-data}
+## plot sentiment graph
+## http://juliasilge.com/blog/If-I-Loved-NLP-Less/
+plot_sentiment <- function (mySentiment, myAnnotate) {
+  g <- ggplot(data = mySentiment, aes(x = linenumber, y = sentiment)) + 
+    geom_bar(stat = "identity", color = "midnightblue") + 
+    geom_label(data = myAnnotate, aes(x, y, label=label), hjust = 0.5, 
+               label.size = 0, size = 3, color="#2b2b2b", inherit.aes = FALSE) + 
+    geom_segment(data = myAnnotate, aes(x = x, y = y1, xend = x, yend = y2), 
+                 arrow = arrow(length = unit(0.04, "npc")), inherit.aes = FALSE) + 
+    theme_minimal() + labs(y = "Sentiment", caption = "Text sourced from Project Gutenberg") + 
+    scale_x_discrete(expand=c(0.02,0)) + theme(plot.caption=element_text(size=8)) + 
+    theme(axis.text.y=element_text(margin=margin(r=-10))) + theme(axis.title.x=element_blank()) + 
+    theme(axis.ticks.x=element_blank()) + theme(axis.text.x=element_blank())
+  }
+
+sent <- llply(split(dtmData, dtmData$.id), function(x){
+  x %>% arrange(.id, Term) %>% mutate(linenumber=rownames(.), 
+                                      sentiment=Freq)
+  })
+
+marks <- llply(sent, function(df){
+  set.seed(sample(100, size=1))
+  data.frame(x=sample(df$linenumber, size=6), y=rep(max(df$Freq), 6), #y=height of labels
+             label=sample(df$Term, size=6), y1=rep(ceiling(max(df$Freq)*0.95), 6), #y1=height of upper arrow
+             y2=sample(ceiling(df$Freq*1.1), size=6)) #y2=height of lower arrow
+  })
+
+## setting of display of the graphs
+## 3 figures arranged in 3 rows and 1 column
+#'@ par(mfrow=c(3,1))
+
+llply(seq(sent), function(i) plot_sentiment(sent[[i]], marks[[i]]) + labs(title = expression(paste('Sentiment in ', italic('Northanger Abbey')))))
+```
+
+  *graph 4.2.1 : Sentimental graph of the files.*
+
+## 4.3 RWeka^[[R talks to Weka about Data Mining](http://www.r-bloggers.com/r-talks-to-weka-about-data-mining/)]
+
+  R provides us with excellent resources to mine data, and there are some good overviews out there:
+  
+  - [Yanchang's website](http://www.rdatamining.com/) with Examples and a nice [reference card](http://www.rdatamining.com/docs/R-refcard-data-mining.pdf)
+  - The rattle-package that introduces a [nice GUI for R](http://rattle.togaware.com/), and [Graham William's compendium of tools](http://onepager.togaware.com/)
+  - The caret-package that offers a unified interface to running a multitude of model builders.
+
+  And there are other tools out there for data mining, like [Weka](http://www.cs.waikato.ac.nz/ml/weka/.
+  
+### 4.3.1 Prediction with J48 (aka C4.5)
+
+  We now build the classifier, and this works with the J48(.)-function:
+  
+```{r Rweka-j48}
+#'@ dtm_j48 <- J48(Term~., data=dtmData[-1])
+#Error in .jcall(o, "Ljava/lang/Class;", "getClass") : 
+#  java.lang.OutOfMemoryError: Java heap space
+
+## subset some sample data in order to avoid memory space error
+dtm_j48 <- J48(Term~., data=dtmData[1:100,-1])
+dtm_j48
+```
+
+```{r data-summary2}
+summary(dtm_j48)
+```
+
+```{r plot-j48}
+plot(iris_j48)
+```
+
+### 4.3.2 Evaluation in Weka
+
+```{r Rweka-eval}
+eval_j48 <- evaluate_Weka_classifier(iris_j48, numFolds = 10, complexity = FALSE, 
+    seed = 1, class = TRUE)
+eval_j48
+```
+
+## 4.4 Plot Dicision Tree
+
+
+# 5. Conclusion
+
+  From the text mining for the german dataset, we sampling the dataset to get the high frequency of occurence of words. Compare to previous version, from the report I also applied `tm`, `wordcloud`, `googleVis`, `rCharts` and `RWeka` packages etc to enhance and display a better data visualization on text mining.
+
+# 6. Appendices
+
+  - Section [6.1 Documenting File Creation]
+  - Section [6.2 Versions' Log]
+  
+## 6.1 Documenting File Creation 
+
+  It's useful to record some information about how your file was created.
+  
+  - File creation date: 2015-07-22
+  - File latest updated date: `r Sys.Date()`
+  - `r R.version.string`
+  - R version (short form): `r getRversion()`
+  - [**rmarkdown** package]() version: `r packageVersion('rmarkdown')`
+  - [**tufte** package](https://github.com/rstudio/tufte) version: `r packageVersion('tufte')`
+  - [**mosaic** package](https://github.com/rstudio/tufte) version: `r packageVersion('mosaic')`
+  - File version: 1.0.1
+  - Author Profile: [®γσ, Eng Lian Hu](https://beta.rstudioconnect.com/englianhu/ryo-eng/)
+  - GitHub: [Source Code](https://github.com/Scibrokes/Betting-Strategy-and-Model-Validation)
+  - Additional session information:
+  
+```{r info, echo=FALSE, results='asis'}
+lubridate::now()
+devtools::session_info()$platform
+Sys.info()
+```
+
+## 6.2 Versions' Log
+
+ - *Apr 22, 2016*: [version 1.0.1]()
+ - *March 14, 2015*: [version: 1.0.0](http://rpubs.com/englianhu/MilestoneReport)
+
