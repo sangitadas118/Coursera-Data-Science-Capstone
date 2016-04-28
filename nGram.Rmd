@@ -1,0 +1,290 @@
+---
+title: "Coursera Capstone Project Milestone Report"
+subtitle: "Data Science Capstone by Johns Hopkins University"
+author: "[®γσ, Eng Lian Hu](http://englianhu.wordpress.com) <img src='figure/ShirotoNorimichi.jpg' width='24'> 白戸則道®"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html:
+    toc: yes
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+# 1. Main Page
+
+<http://rpubs.com/englianhu/milestone-report>
+
+# 5. NGrams Combine Words
+
+## 5.1 Explore Data
+
+  Now that we have a cleansed data, it’s time to tokenize the words. We would identify appropriate tokens such as words, punctuation, and numbers. Then we structure the words for auto suggestion.
+
+  As suggested in the course content, writing a function for N-Grams that takes size and returns structured data set.
+
+```{r load-packages, cache=TRUE, include=FALSE}
+## Loading the package 'BBmisc'
+if(suppressMessages(!require('BBmisc'))) install.packages('BBmisc')
+suppressMessages(library('BBmisc'))
+
+pkgs <- c('tufte', 'knitr', 'rmarkdown', 'lubridate', 'plyr', 'dplyr', 'magrittr', 'purrr', 'stringr', 'stringi', 'wordcloud', 'slam', 'tm', 'igraph', 'NLP', 'xtable', 'SnowballC', 'rpart', 'RWeka', 'RColorBrewer', 'rvest', 'parallel', 'doParallel', 'ggplot2', 'googleVis', 'htmltools', 'rCharts', 'janeaustenr', 'syuzhet', 'viridis')
+suppressAll(lib(pkgs)) 
+
+## load in case of BBmisc::lib() doesn't work
+suppressAll(plyr::l_ply(pkgs, require, quietly = TRUE))
+rm(pkgs)
+```
+
+```{r setting-adjustment, echo=FALSE}
+## Load BBmisc package again since there has error during knit (while working fine if run chunk-by-chunk)
+suppressMessages(library('BBmisc'))
+
+## Creating a parallel computing Cluster and support functions.
+## Preparing the parallel cluster using the cores
+doParallel::registerDoParallel(cores = 16)
+#'@ BiocParallel::register(MulticoreParam(workers=8))
+
+## Preparing the parallel cluster using the cores
+suppressAll(library('parallel'))
+jobcluster <- makeCluster(detectCores())
+invisible(clusterEvalQ(jobcluster, library('tm')))
+invisible(clusterEvalQ(jobcluster, library('RWeka')))
+options(mc.cores = 2)
+
+## Set the googleVis options first to change the behaviour of plot.gvis, so that only the chart 
+##  component of the HTML file is written into the output file.
+##  
+## Set option to below if you want to plot an independent webpage with graph 
+#'@ op <- options(gvis.plot.tag=NULL)
+op <- options(gvis.plot.tag='chart')
+
+## knitr configuration
+# invalidate cache when the tufte version changes
+suppressAll(library('knitr'))
+
+opts_chunk$set(tidy = TRUE, fig.path = 'figure/', comment = NA, message = FALSE, fig.keep = 'high', fig.width = 10, fig.height = 6, fig.align = 'center', cache.extra = packageVersion('tufte'), echo = TRUE, progress = TRUE)
+
+## Setting for rCharts
+## http://ramnathv.github.io/posts/rcharts-nvd3/
+options(warn = -1, htmltools.dir.version = FALSE, 
+        rcharts.mode = 'iframesrc', rcharts.cdn = TRUE, 
+        RCHART_WIDTH = 600, RCHART_HEIGHT = 400, 
+        RCHART_TEMPLATE = 'Rickshaw.html', RCHART_LIB = 'morris')
+```
+
+```{r clear-memory, include=FALSE}
+## clear memory cache to lease the memory capacity ease
+gc()
+```
+
+```{r collect-data, echo=FALSE}
+if(!file.exists('data/')) dir.create('data/')
+
+lnk <- 'https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip'
+destfile <- 'Coursera-SwiftKey.zip'
+
+if(!file.exists(paste0('data/', destfile))) {
+  download.file(lnk, destfile = paste0('data/', destfile))
+}
+
+if(!file.exists(paste0('data/final'))) {
+  ## Unzip the dataset
+  #'@ unzip(paste0('data/', destfile), exdir = 'data/final/de_DE', list = TRUE)
+  # Error in unzip(paste0("data/", destfile), exdir = "data/final/de_DE",  : 
+  #   'exdir' does not exist
+  unzip(paste0('data/', destfile), exdir = 'data/')
+}
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r rm-objs1, include=FALSE}
+rm(lnk, destfile)
+```
+
+```{r project-files, echo=FALSE}
+## Load plyr and dplyr packages again since there has error during knit (while working fine if run chunk-by-chunk)
+suppressAll(library('plyr'))
+suppressAll(library('dplyr'))
+
+## files for this mile-stone report
+lsfiles <- list.files('data/final/de_DE')
+
+## summary of files
+datafiles <- paste0('data/final/de_DE/', lsfiles)
+rm(lsfiles)
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r read-files-efficiency1, echo=FALSE}
+## Load plyr and stringr packages again since there has error during knit (while working fine if run chunk-by-chunk)
+suppressAll(library('plyr'))
+suppressAll(library('stringr'))
+
+## Creating a parallel computing Cluster and support functions.
+## Preparing the parallel cluster using the cores
+doParallel::registerDoParallel(cores = 16)
+
+## http://www.r-bloggers.com/faster-files-in-r/
+## 
+## Run without parallel computing
+## 
+## readLines in normal way
+suppressAll(
+  dat1 <- llply(datafiles, function(x){
+    readLines(x, encoding = 'UTF-8')           
+  }))                                                                
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r matching-data, echo=FALSE}
+#'@ names(dat1) <- names(dat1p) <- names(dat2) <- names(dat2p) <- 
+#'@   names(dat3) <- names(dat3p) <- c('blogs', 'news', 'twitter')
+names(dat1) <- c('blogs', 'news', 'twitter')
+
+## Delete the data folders to save the capacity.
+unlink('data/final', recursive = TRUE)
+
+#'@ dats <- c(dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s)
+dats <- list(dat1)
+
+suppressAll(rm(dat1, dat1p, dat2, dat2p, dat3, dat3p, dat3s))
+
+## randomly take one data as sample files for further analysis
+smp <- sample(dats, size=1) %>% unlist(recursive=FALSE)
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r rm-objs2, include=FALSE}
+rm(datafiles, dats)
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r sampling, echo=FALSE}
+## Load tm package again since there has error during knit (while working fine if run chunk-by-chunk)
+suppressAll(library('tm'))
+
+## Randomly sampling the dataset
+## 5000 data sample taken from populations
+#'@ dataSubset <- sample(unlist(smp), size = 3000, replace = TRUE) #united 3 files into one
+dataSubset <- llply(smp, sample, size = 3000)#, replace = TRUE) #seperately for rCharts
+corpus <- llply(dataSubset, function(x) Corpus(VectorSource(x)))
+rm(dataSubset)
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r filter-words2, echo=FALSE}
+## Cleaning the data (process the text) for Exploratory Analysis
+skipWords1 <- function(x) removeWords(x, stopwords('german'))
+#'@ skipWords2 <- function(x) removeWords(x, bWords)
+
+funcs <- list(content_transformer(tolower), removePunctuation, stemDocument, 
+              stripWhitespace, removeNumbers, PlainTextDocument, skipWords1)#, skipWords2)
+corpus <- llply(corpus, function(x){
+  cp <- tm_map(x, FUN = tm_reduce, tmFuns = funcs)
+  #'@ tm_map(cp, removeWords, bWords)
+  #Error in UseMethod("meta", x) : 
+  #  no applicable method for 'meta' applied to an object of class "try-error"
+  }) #'@ , mc.cores=2)) #apply mc.cores=2 will be slower
+
+rm(lnk, bWords, skipWords1, skipWords2, funcs)
+```
+
+```{r clear-memory, include=FALSE}
+```
+
+```{r ngram-funs}
+## nGrams function
+nGramFn <- function(corpusData, ng){
+  options(mc.cores=1)
+  nGramTokenizer <- function(nData) RWeka::NGramTokenizer(nData, Weka_control(min = ng, max = ng, delimiters = ' \\r\\n\\t.,;:\"()?!'))
+  tdMatrix <- TermDocumentMatrix(corpusData, control = list(tokenize=nGramTokenizer, 
+                                                            removePunctuation = TRUE, 
+                                                            stopwords = TRUE))
+  tdMatrix <- as.data.frame(apply(tdMatrix, 1, sum))
+  summary(tdMatrix)
+  #colnames(tdMatrix) <- c('Frequency')
+  return(tdMatrix)
+}
+```
+
+```{r plot-ngram-funs}
+## Filter Dataframe
+filterData <- function(nDataFrame){
+  nDataFrame <- as.data.frame(cbind(rownames(nDataFrame), nDataFrame[, 1]))
+  colnames(nDataFrame) <- c('Word', 'Frequency')
+  nDataFrame <- nDataFrame[order(nDataFrame$Frequency, decreasing = TRUE), ]
+  print(head(nDataFrame))
+  nDataFrame <- nDataFrame[1:10, ]
+  return(nDataFrame)
+}
+```
+
+```{r convert-nGram-data}
+## Write the function inside nGramFn() again since it cannot be found during knitting, but no error if run chunk-by-chunk.
+
+suppressAll(library('RWeka'))
+corpusData = llply(corpus, sample, size=100)
+nGramTokenizer <<- function(nData) NGramTokenizer(nData, Weka_control(min = ng, max = ng, delimiters = ' \\r\\n\\t.,;:\"()?!'))
+```
+
+```{conv0}
+tdMatrix <- TermDocumentMatrix(corpusData, control = list(tokenize=nGramTokenizer, 
+                                                            removePunctuation = TRUE, 
+                                                            stopwords = TRUE))
+  tdMatrix <- as.data.frame(apply(tdMatrix, 1, sum))
+  summary(tdMatrix)
+```
+
+```{r conv1}
+nGram1 <- llply(corpusData, function(x) {
+  nGramFn(x, ng = 1)
+  })
+```
+
+```{r conv2}
+nGram2 <- llply(corpusData, function(x) {
+  nGramFn(x, ng = 2)
+  })
+```
+
+```{r conv3}
+nGram3 <- llply(corpusData, function(x) {
+  nGramFn(x, ng = 3)
+  })
+```
+
+```{r filt1}
+nG1 <- llply(nGram1, function(x){
+  filterData(x)
+})
+```
+
+```{r filt2}
+nG2 <- llply(nGram2, function(x){
+  filterData(x)
+})
+```
+
+```{r filt3}
+nG3 <- llply(nGram3, function(x){
+  filterData(x)
+})
+```
