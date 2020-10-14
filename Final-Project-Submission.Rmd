@@ -1,7 +1,7 @@
 ---
 title: "Coursera Data Science Capstone - Final Project Submission"
-author: "®γσ, Eng Lian Hu"
-date: "4/28/2016"
+author: "Sangita Das"
+date: "14/10/2020"
 output: 
   revealjs::revealjs_presentation:
     incremental: true
